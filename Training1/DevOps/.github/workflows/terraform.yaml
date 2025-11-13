@@ -1,0 +1,135 @@
+name: Terraform CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  TF_IN_AUTOMATION: true
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. PERIMETER NETWORK LAYER
+  # ──────────────────────────────────────────────
+  perimeter_network:
+    name: Perimeter Network Layer
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: Training1/Perimeter
+        run: terraform init -input=false
+
+      - name: Terraform Apply (Network)
+        working-directory: Training1/Perimeter
+        run: terraform apply -auto-approve
+
+  # ──────────────────────────────────────────────
+  # 2. PERIMETER SERVICE LAYER
+  # ──────────────────────────────────────────────
+  perimeter_service:
+    name: Perimeter Service Layer
+    runs-on: ubuntu-latest
+    needs: [perimeter_network]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: Training1/Perimeter
+        run: terraform init -input=false
+
+      - name: Terraform Apply (Service)
+        working-directory: Training1/Perimeter
+        run: terraform apply -auto-approve
+
+  # ──────────────────────────────────────────────
+  # 3. DEVOPS NETWORK LAYER
+  # ──────────────────────────────────────────────
+  devops_network:
+    name: DevOps Network Layer
+    runs-on: ubuntu-latest
+    needs: [perimeter_service]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: Training1/DevOps
+        run: terraform init -input=false
+
+      - name: Terraform Apply (DevOps Network)
+        working-directory: Training1/DevOps
+        run: terraform apply -auto-approve
+
+  # ──────────────────────────────────────────────
+  # 4. DEVOPS SERVICE LAYER
+  # ──────────────────────────────────────────────
+  devops_service:
+    name: DevOps Service Layer
+    runs-on: ubuntu-latest
+    needs: [devops_network]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: Training1/DevOps
+        run: terraform init -input=false
+
+      - name: Terraform Apply (DevOps Service)
+        working-directory: Training1/DevOps
+        run: terraform apply -auto-approve
