@@ -1,0 +1,85 @@
+stages:
+  - perimeter_network
+  - perimeter_service
+  - devops_network
+  - devops_service
+
+.default_terraform: &default_terraform
+  image: hashicorp/terraform:1.6.0
+  before_script:
+    - terraform -version
+    - export TF_IN_AUTOMATION=true
+    - export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+    - export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    - export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+
+# ────────────────────────────────────────────────
+# 1. PERIMETER NETWORK PIPELINE
+# ────────────────────────────────────────────────
+perimeter-network-layer-pipeline:
+  stage: perimeter_network
+  extends: .default_terraform
+  script:
+    - cd Training1/Perimeter
+    - terraform init -input=false
+    - terraform plan -out=plan.tfplan
+    - terraform apply -auto-approve plan.tfplan
+  only:
+    - main
+
+# ────────────────────────────────────────────────
+# 2. PERIMETER SERVICE PIPELINE (Depends on network)
+# ────────────────────────────────────────────────
+perimeter-service-layer-pipeline:
+  stage: perimeter_service
+  extends: .default_terraform
+  script:
+    - cd Training1/Perimeter
+    - terraform init -input=false
+    - terraform plan -target=aws_internet_gateway.this \
+                     -target=aws_nat_gateway.this \
+                     -out=service-plan.tfplan
+    - terraform apply -auto-approve service-plan.tfplan
+  dependencies:
+    - perimeter-network-layer-pipeline
+  only:
+    - main
+
+# ────────────────────────────────────────────────
+# 3. DEVOPS NETWORK PIPELINE
+# ────────────────────────────────────────────────
+devops-network-layer-pipeline:
+  stage: devops_network
+  extends: .default_terraform
+  script:
+    - cd Training1/DevOps
+    - terraform init -input=false
+    - terraform plan -target=module.vpc \
+                     -target=module.private_subnets \
+                     -out=devops-network.tfplan
+    - terraform apply -auto-approve devops-network.tfplan
+  only:
+    - main
+  dependencies:
+    - perimeter-service-layer-pipeline
+
+# ────────────────────────────────────────────────
+# 4. DEVOPS SERVICE PIPELINE (SSM endpoints + EC2)
+# ────────────────────────────────────────────────
+devops-service-layer-pipeline:
+  stage: devops_service
+  extends: .default_terraform
+  script:
+    - cd Training1/DevOps
+    - terraform init -input=false
+    - terraform plan -target=aws_vpc_endpoint.ssm \
+                     -target=aws_vpc_endpoint.ssmmessages \
+                     -target=aws_vpc_endpoint.ec2messages \
+                     -target=aws_vpc_endpoint.s3 \
+                     -target=aws_instance.devops_vm \
+                     -out=devops-service.tfplan
+    - terraform apply -auto-approve devops-service.tfplan
+  only:
+    - main
+  dependencies:
+    - devops-network-layer-pipeline
